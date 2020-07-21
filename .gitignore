@@ -1,0 +1,11 @@
+
+*.pyc
+
+venv
+venv/
+
+.idea
+.idea/
+
+.vscode
+.vscode/
