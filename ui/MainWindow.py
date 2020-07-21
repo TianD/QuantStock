@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 # coding=utf-8
-# Copyright (c) 2019 MoreVFX. All rights reserved.
 # created by huiguoyu @ 2020/7/21 13:11
+import datetime
+import os
 
 import requests
 from PySide import QtCore
 from PySide import QtGui
+from playsound import playsound
 
 
 class StockModel(QtCore.QAbstractTableModel):
@@ -28,6 +30,7 @@ class StockModel(QtCore.QAbstractTableModel):
     @property
     def header_data(self):
         return [u'股票名称',
+                u'买入价',
                 u'今日开盘价',
                 u'昨日收盘价',
                 u'当前价格',
@@ -59,6 +62,9 @@ class StockModel(QtCore.QAbstractTableModel):
         if role == QtCore.Qt.DisplayRole:
             return self.source_data[row][column]
 
+    def setData(self, index, value, role=QtCore.Qt.EditRole):
+        pass
+
     def update_source_data(self, source_data):
         self.beginResetModel()
         self.source_data = source_data
@@ -67,7 +73,6 @@ class StockModel(QtCore.QAbstractTableModel):
 
 class MainWindow(QtGui.QWidget):
 
-
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
 
@@ -75,7 +80,6 @@ class MainWindow(QtGui.QWidget):
         self.initData()
         self.bindFun()
         self.request_timer.start()
-
 
     def setupUi(self, parent):
         self.setWindowFlags(QtCore.Qt.Window)
@@ -88,15 +92,26 @@ class MainWindow(QtGui.QWidget):
         self.stock_model = StockModel()
         self.stock_tableView.setModel(self.stock_model)
         self.main_layout.addWidget(self.stock_tableView)
+        #
+        self.request_timer = QtCore.QTimer()
+        self.request_timer.setInterval(1000)
+        #
+        self.audio_thread = QtCore.QThread()
+        self.audio_thread.run = self.play_sound
+        self.audio_thread.start()
+        #
+        self.strategy_thread = QtCore.QThread()
+        self.strategy_thread.run = self.caculate
+        self.strategy_thread.start()
 
     def bindFun(self):
         self.request_timer.timeout.connect(self.request_stock)
 
     def initData(self):
-        self.request_timer = QtCore.QTimer()
-        self.request_timer.setInterval(1000)
+        self.stock_lineEdit.setText(self._read_list())
 
     def request_stock(self):
+        now = datetime.datetime.now()
         stock_text = self.stock_lineEdit.text()
         response = requests.get('http://hq.sinajs.cn/list=%s' % stock_text)
         if response.status_code == 200:
@@ -106,22 +121,33 @@ class MainWindow(QtGui.QWidget):
                 stock_code, stock_detail = stock.split('=')
                 stock_code = stock_code.split('var ')[1]
                 stock_detal_list = stock_detail.split(',')
-                result.append([
+                temp_list = [
                     stock_detal_list[0],
                     stock_detal_list[1],
                     stock_detal_list[2],
                     stock_detal_list[3],
                     stock_detal_list[4],
                     stock_detal_list[5],
-                    stock_detal_list[-4],
-                    stock_detal_list[-3],
-                ])
+                ]
+                if now.strftime('%H') >= '15':
+                    temp_list.append(stock_detal_list[-3])
+                    temp_list.append(stock_detal_list[-2])
+                else:
+                    temp_list.append(stock_detal_list[-4])
+                    temp_list.append(stock_detal_list[-3])
+                result.append(temp_list)
+
         self.stock_model.update_source_data(result)
 
+    def _read_list(self):
+        file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'StockList.txt')
+        stock_list = []
+        with open(file_path, 'r') as f:
+            stock_list = f.readline()
+        return stock_list
 
-if __name__ == '__main__':
-    import sys
-    app = QtGui.QApplication(sys.argv)
-    win = MainWindow()
-    win.show()
-    app.exec_()
+    def play_sound(self):
+        mp3_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources/8487.mp3')
+        playsound(mp3_path)
+        playsound(mp3_path)
+        playsound(mp3_path)
