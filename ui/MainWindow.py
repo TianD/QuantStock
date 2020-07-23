@@ -30,7 +30,6 @@ class StockModel(QtCore.QAbstractTableModel):
     @property
     def header_data(self):
         return [u'股票名称',
-                u'买入价',
                 u'今日开盘价',
                 u'昨日收盘价',
                 u'当前价格',
@@ -62,8 +61,59 @@ class StockModel(QtCore.QAbstractTableModel):
         if role == QtCore.Qt.DisplayRole:
             return self.source_data[row][column]
 
-    def setData(self, index, value, role=QtCore.Qt.EditRole):
-        pass
+    def update_source_data(self, source_data):
+        self.beginResetModel()
+        self.source_data = source_data
+        self.endResetModel()
+
+
+class StrategyModel(QtCore.QAbstractTableModel):
+
+    def __init__(self, source_data=None, parent=None):
+        super(StrategyModel, self).__init__(parent)
+        self.__source_data = source_data or []
+
+    @property
+    def source_data(self):
+        return self.__source_data
+
+    @source_data.setter
+    def source_data(self, value):
+        if isinstance(value, list):
+            self.__source_data = value
+        else:
+            raise TypeError('expected a list object, but got a %s object.' % type(value).__name__)
+
+    @property
+    def header_data(self):
+        return [u'买入价',
+                u'浮盈比例',
+                u'回吐比例',
+                u'今日最高价',
+                u'浮盈出场价格']
+
+    def rowCount(self, parentIndex=QtCore.QModelIndex()):
+        return len(self.source_data)
+
+    def columnCount(self, parentIndex=QtCore.QModelIndex()):
+        return len(self.header_data)
+
+    def headerData(self, section, orientation, role=QtCore.Qt.DisplayRole):
+        if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
+            return self.header_data[section]
+
+    def flags(self, index):
+        if index.isValid():
+            return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
+
+    def data(self, index, role=QtCore.Qt.DisplayRole):
+        if not index.isValid():
+            return
+        row = index.row()
+        column = index.column()
+        key = self.header_data[column]
+        if role == QtCore.Qt.DisplayRole:
+            return self.source_data[row][column]
 
     def update_source_data(self, source_data):
         self.beginResetModel()
@@ -88,10 +138,24 @@ class MainWindow(QtGui.QWidget):
         self.setLayout(self.main_layout)
         self.stock_lineEdit = QtGui.QLineEdit()
         self.main_layout.addWidget(self.stock_lineEdit)
+        self.view_layout = QtGui.QHBoxLayout()
+        self.main_layout.addLayout(self.view_layout)
+        self.stock_layout = QtGui.QVBoxLayout()
+        self.view_layout.addLayout(self.stock_layout)
+        self.stock_label = QtGui.QLabel(u'行情')
+        self.stock_layout.addWidget(self.stock_label)
         self.stock_tableView = QtGui.QTableView()
+        self.stock_layout.addWidget(self.stock_tableView)
         self.stock_model = StockModel()
         self.stock_tableView.setModel(self.stock_model)
-        self.main_layout.addWidget(self.stock_tableView)
+        self.strategy_layout = QtGui.QVBoxLayout()
+        self.view_layout.addLayout(self.strategy_layout)
+        self.strategy_label = QtGui.QLabel(u'策略')
+        self.strategy_layout.addWidget(self.strategy_label)
+        self.strategy_tableView = QtGui.QTableView()
+        self.strategy_model = StrategyModel()
+        self.strategy_tableView.setModel(self.strategy_model)
+        self.strategy_layout.addWidget(self.strategy_tableView)
         #
         self.request_timer = QtCore.QTimer()
         self.request_timer.setInterval(1000)
@@ -129,12 +193,12 @@ class MainWindow(QtGui.QWidget):
                     stock_detal_list[4],
                     stock_detal_list[5],
                 ]
-                if now.strftime('%H') >= '15':
-                    temp_list.append(stock_detal_list[-3])
-                    temp_list.append(stock_detal_list[-2])
-                else:
-                    temp_list.append(stock_detal_list[-4])
-                    temp_list.append(stock_detal_list[-3])
+                # if now.strftime('%H') >= '15':
+                temp_list.append(stock_detal_list[-3])
+                temp_list.append(stock_detal_list[-2])
+                # else:
+                #     temp_list.append(stock_detal_list[-4])
+                #     temp_list.append(stock_detal_list[-3])
                 result.append(temp_list)
 
         self.stock_model.update_source_data(result)
@@ -151,3 +215,6 @@ class MainWindow(QtGui.QWidget):
         playsound(mp3_path)
         playsound(mp3_path)
         playsound(mp3_path)
+
+    def caculate(self):
+        pass
