@@ -9,3 +9,9 @@ venv/
 
 .vscode
 .vscode/
+
+build/
+build
+
+dist
+dist/

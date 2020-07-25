@@ -147,6 +147,7 @@ class MainWindow(QtGui.QWidget):
     def setupUi(self, parent):
         self.setWindowFlags(QtCore.Qt.Window)
         self.setWindowTitle('StockWatcher')
+        self.setWindowIcon(QtGui.QIcon("resources/favicon.ico"))
         self.main_layout = QtGui.QVBoxLayout()
         self.setLayout(self.main_layout)
         self.stock_lineEdit = QtGui.QLineEdit()
@@ -272,7 +273,7 @@ class MainWindow(QtGui.QWidget):
             return bid*(1+gains*(1-giveup))
 
     def _read_config(self):
-        file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'StockList.yml')
+        file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data/StockList.yml')
         stock_dict = {}
         with open(file_path, 'r') as f:
             stock_dict = yaml.load(f)
@@ -291,7 +292,7 @@ class MainWindow(QtGui.QWidget):
     def closeEvent(self, event):
         strategy_list = self.strategy_model.source_data
         stock_dict = {strategy[0]: strategy[2] for strategy in strategy_list}
-        file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'StockList.yml')
+        file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data/StockList.yml')
         with open(file_path, 'w') as f:
             f.write(yaml.dump(stock_dict))
 
