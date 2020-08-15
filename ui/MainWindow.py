@@ -124,7 +124,7 @@ class StrategyModel(QtCore.QAbstractTableModel):
         elif role == QtCore.Qt.BackgroundColorRole:
             flag = self.source_data[row][-1]
             if flag:
-                return QtGui.QColor("#FF0000")
+                return QtGui.QColor(flag)
 
     def update_source_data(self, source_data):
         self.beginResetModel()
@@ -210,9 +210,9 @@ class MainWindow(QtGui.QWidget):
                         stock_detal_list[3],
                         stock_detal_list[4],
                         stock_detal_list[5],
+                        stock_detal_list[30],
+                        stock_detal_list[31]
                     ]
-                    temp_list.append(stock_detal_list[-3])
-                    temp_list.append(stock_detal_list[-2])
                     result.append(temp_list)
                 except:
                     pass
@@ -233,10 +233,13 @@ class MainWindow(QtGui.QWidget):
             giveup = self._get_giveup(gains)
             line = self._get_line(bid, gains, giveup) if bid > 0 else 0
             if current and current <= line:
-                flag = True
+                flag = 'red'
+                self.playFlag.emit()
+            if current < bid*0.97:
+                flag = 'green'
                 self.playFlag.emit()
             else:
-                flag = False
+                flag = None
             strategy_list.append([
                 code,
                 name,
