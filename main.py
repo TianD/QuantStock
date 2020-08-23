@@ -3,7 +3,7 @@
 # created by huiguoyu @ 2020/7/21 10:22
 import sys
 from PySide import QtGui
-from ui.MainWindow import MainWindow
+from ui.DealWidget import MainWindow
 
 
 if __name__ == '__main__':
