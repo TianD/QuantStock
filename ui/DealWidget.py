@@ -10,6 +10,9 @@ from PySide import QtCore
 from PySide import QtGui
 from playsound import playsound
 
+from core.StockGetter import format_code_to_sina, request_stock, retrospect_to_date, format_code_to_163, \
+    get_history_data
+
 
 class StockModel(QtCore.QAbstractTableModel):
 
@@ -32,13 +35,9 @@ class StockModel(QtCore.QAbstractTableModel):
     def header_data(self):
         return [u'股票代码',
                 u'股票名称',
-                u'今日开盘价',
-                u'昨日收盘价',
-                u'当前价格',
-                u'今日最高价',
-                u'今日最低价',
-                u'日期',
-                u'时间']
+                u'买入价',
+                u'买入日期',
+                u'追溯天数']
 
     def rowCount(self, parentIndex=QtCore.QModelIndex()):
         return len(self.source_data)
@@ -52,7 +51,8 @@ class StockModel(QtCore.QAbstractTableModel):
 
     def flags(self, index):
         if index.isValid():
-            return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
+            return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEditable
+        return QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
 
     def data(self, index, role=QtCore.Qt.DisplayRole):
         if not index.isValid():
@@ -60,8 +60,23 @@ class StockModel(QtCore.QAbstractTableModel):
         row = index.row()
         column = index.column()
         key = self.header_data[column]
-        if role == QtCore.Qt.DisplayRole:
-            return self.source_data[row][column]
+        if role == QtCore.Qt.DisplayRole or role == QtCore.Qt.EditRole:
+            try:
+                return self.source_data[row][column]
+            except:
+                return
+
+    def setData(self, index, value, role=QtCore.Qt.EditRole):
+        if not index.isValid():
+            return False
+        row = index.row()
+        column = index.column()
+        key = self.header_data[column]
+        if role == QtCore.Qt.EditRole:
+            self.__source_data[row][column] = value
+        self.dataChanged.emit(index, index)
+        return True
+
 
     def update_source_data(self, source_data):
         self.beginResetModel()
@@ -90,11 +105,13 @@ class StrategyModel(QtCore.QAbstractTableModel):
     def header_data(self):
         return [u'股票代码',
                 u'股票名称',
-                u'买入价',
+                u'当前价',
                 u'浮盈比例',
                 u'回吐比例',
-                u'今日最高价',
-                u'浮盈出场价格']
+                u'最高价',
+                u'浮盈出场价格'
+                u'止损价格',
+                ]
 
     def rowCount(self, parentIndex=QtCore.QModelIndex()):
         return len(self.source_data)
@@ -135,25 +152,25 @@ class StrategyModel(QtCore.QAbstractTableModel):
 class DealWidget(QtGui.QWidget):
 
     playFlag = QtCore.Signal()
+    code = u'交易追踪'
 
     def __init__(self, parent=None):
         super(DealWidget, self).__init__(parent)
 
         self.setupUi(self)
-        self.initData()
+        self.initDataBefore()
         self.bindFun()
-        self.request_timer.start()
+        self.initDataAfter()
+
 
     def setupUi(self, parent):
         self.main_layout = QtGui.QVBoxLayout()
         self.setLayout(self.main_layout)
-        self.stock_lineEdit = QtGui.QLineEdit()
-        self.main_layout.addWidget(self.stock_lineEdit)
         self.view_layout = QtGui.QHBoxLayout()
         self.main_layout.addLayout(self.view_layout)
         self.stock_layout = QtGui.QVBoxLayout()
         self.view_layout.addLayout(self.stock_layout)
-        self.stock_label = QtGui.QLabel(u'行情')
+        self.stock_label = QtGui.QLabel(u'自选股')
         self.stock_layout.addWidget(self.stock_label)
         self.stock_tableView = QtGui.QTableView()
         self.stock_layout.addWidget(self.stock_tableView)
@@ -167,8 +184,8 @@ class DealWidget(QtGui.QWidget):
         self.strategy_model = StrategyModel()
         self.strategy_tableView.setModel(self.strategy_model)
         self.strategy_layout.addWidget(self.strategy_tableView)
-        self.stock_tableView.setFixedWidth(640)
-        self.strategy_tableView.setFixedWidth(450)
+        self.stock_tableView.setFixedWidth(360)
+        self.strategy_tableView.setMinimumWidth(500)
         #
         self.request_timer = QtCore.QTimer()
         self.request_timer.setInterval(1000)
@@ -180,12 +197,46 @@ class DealWidget(QtGui.QWidget):
         self.request_timer.timeout.connect(self.request_stock)
         self.request_timer.timeout.connect(self.run_strategy)
         self.playFlag.connect(self.play)
-        self.strategy_tableView.doubleClicked.connect(self.edit_bid)
+        self.stock_model.dataChanged.connect(self.update_custom_view)
 
-    def initData(self):
-        self.config_data = self._read_config() or {}
-        stock_text = ','.join(self.config_data.keys()) if self.config_data else ''
-        self.stock_lineEdit.setText(stock_text)
+    def initDataBefore(self):
+        # 读取配置
+        config = self._read_config()
+        custom_stock_list = []
+        today = datetime.datetime.today().strftime('%Y%m%d')
+        for key, value in config.items():
+            code = key
+            sina_code = format_code_to_sina(code)
+            try:
+                result = request_stock(sina_code)
+            except:
+                continue
+            name = result[0][1]
+            bid_price = value[0]
+            bid_date = value[1]
+            try:
+                retrospect_days = value[2]
+            except:
+                retrospect_days = 1
+            history_data = get_history_data(code)
+            custom_stock_list.append([code, name, bid_price, bid_date, retrospect_days])
+
+        self.stock_model.update_source_data(custom_stock_list)
+        self.stock_tableView.resizeColumnsToContents()
+
+    def initDataAfter(self):
+        # 获取最高价
+        # 开始请求行情
+        # self.request_timer.start()
+        pass
+
+    def update_custom_view(self, index):
+        row = index.row()
+        column = index.column()
+        if column == 0:
+            pass
+
+
 
     def request_stock(self):
         now = datetime.datetime.now()

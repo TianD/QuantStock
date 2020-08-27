@@ -1,5 +1,6 @@
 # coding:utf-8
 import datetime
+import json
 import time
 
 import pandas as pd
@@ -8,7 +9,7 @@ import sqlite3
 from StringIO import StringIO
 
 
-def request_stock(query_datetime, stock_list):
+def request_stock(stock_list):
     response = requests.get('http://hq.sinajs.cn/list=%s' % stock_list)
     if response.status_code == 200:
         stock_list = response.text.split(';\n')
@@ -22,7 +23,7 @@ def request_stock(query_datetime, stock_list):
     return result
 
 
-def request_date_is_holiday(day):
+def request_date_is_tradeday(day):
     server_url = "http://timor.tech/api/holiday/info/%s" % day
     req = requests.get(server_url)
     data = req.json()
@@ -32,11 +33,21 @@ def request_date_is_holiday(day):
         return True
     return False
 
+def retrospect_to_date(from_day, days):
+    i = 0
+    to_day = pd.to_datetime(from_day, format='%Y%m%d')
+    while True:
+        is_tradeday = request_date_is_tradeday(to_day.strftime('%Y-%m-%d'))
+        if is_tradeday:
+            i += 1
+        if i >= days:
+            return to_day.strftime('%Y%m%d')
+        to_day = pd.to_datetime(to_day) - pd.Timedelta(1, 'day')
 
 def format_code_to_163(stock_code):
-    if stock_code.starts_with('6'):
-        stock_code = '0'+stock_code
-    elif stock_code.starts_with('0'):
+    if stock_code.startswith('6'):
+        stock_code = stock_code
+    elif stock_code.startswith('0'):
         stock_code = '1'+stock_code
     else:
         pass
@@ -44,29 +55,29 @@ def format_code_to_163(stock_code):
 
 
 def format_code_to_sina(stock_code):
-    if stock_code.starts_with('6'):
+    if stock_code.startswith('6'):
         stock_code = 'sh' + stock_code
-    elif stock_code.starts_with('0'):
+    elif stock_code.startswith('0'):
         stock_code = 'sz' + stock_code
     else:
         pass
     return stock_code
 
 
-def get_history_data(stock_code, start_date, end_date):
-    url_template = "http://quotes.money.163.com/service/chddata.html?code={formatted_stock_code}&start={start_date}&end={end_date}&fields=TCLOSE;HIGH;LOW;TOPEN;LCLOSE;CHG;PCHG;TURNOVER;VOTURNOVER;VATURNOVER;TCAP;MCAP"
-    formatted_stock_code = format_code_to_163(stock_code)
-    server_url = url_template.format(formatted_stock_code=formatted_stock_code, start_date=start_date,end_date=end_date)
+def get_history_data(stock_code):
+    url_template = "https://q.stock.sohu.com/hisHq?code=cn_{stock_code}&order=D&period=d"
+    # formatted_stock_code = format_code_to_163(stock_code)
+    server_url = url_template.format(stock_code=stock_code)
     req = requests.get(server_url)
-    content = req.content.decode('GBK')
-    data = StringIO(content)
-    return pd.read_csv(data, sep=",")
+    content = json.loads(req.content)
+    return content[0].get('hq')
 
 
 if __name__ == '__main__':
     day = '2020-08-12'
-    query_time = time.strptime(day, '%Y-%m-%d')
-    query_time = time.mktime(query_time)
-    print(request_stock(query_time, 'sz002668'))
-    print(request_date_is_holiday(day))
-    print(get_history_data())
+    # query_time = time.strptime(day, '%Y-%m-%d')
+    # query_time = time.mktime(query_time)
+    # print(request_stock(query_time, 'sz002668'))
+    # print(request_date_is_tradeday(day))
+    print(get_history_data('000858'))
+    # print(retrospect_to_date(day, 5))
