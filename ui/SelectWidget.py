@@ -24,7 +24,11 @@ class SelectWidget(QtGui.QWidget):
 
 
     def setupUi(self, parent):
-        pass
+        self.setWindowTitle(u'策略选股')
+        self.main_layout = QtGui.QVBoxLayout()
+        self.setLayout(self.main_layout)
+        self.label = QtGui.QLabel(u'敬请期待')
+        self.main_layout.addWidget(self.label)
 
     def initData(self):
         pass

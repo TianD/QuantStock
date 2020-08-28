@@ -36,10 +36,13 @@ class MainWindow(QtGui.QMainWindow):
         self.view_menu.addAction(self.select_action)
         self.custom_select_action = QtGui.QAction(u'添加自选股', None)
         self.view_menu.addAction(self.custom_select_action)
-        self.qrcode_action = QtGui.QAction(u'群二维码', None)
-        self.help_menu.addAction(self.qrcode_action)
+        self.mute_action = QtGui.QAction(u'静音', None)
+        self.mute_action.setCheckable(True)
+        self.view_menu.addAction(self.mute_action)
+        self.help_action = QtGui.QAction(u'帮助', None)
+        self.help_menu.addAction(self.help_action)
         self.tab_widget = QtGui.QTabWidget()
-        self.deal_tab = DealWidget()
+        self.deal_tab = DealWidget(mute_flag=False)
         self.tab_widget.addTab(self.deal_tab, u'交易追踪')
         self.select_tab = SelectWidget()
         self.setCentralWidget(self.tab_widget)
@@ -48,7 +51,8 @@ class MainWindow(QtGui.QMainWindow):
         self.deal_action.toggled.connect(partial(self.change_tab, self.deal_tab))
         self.select_action.toggled.connect(partial(self.change_tab, self.select_tab))
         self.custom_select_action.triggered.connect(partial(self.show_dialog, CustomSelectDialog))
-        self.qrcode_action.triggered.connect(partial(self.show_dialog, QRCodeDialog))
+        self.help_action.triggered.connect(partial(self.show_dialog, QRCodeDialog))
+        self.mute_action.toggled.connect(self.deal_tab.mute)
 
     def initData(self):
         self.deal_action.setChecked(True)
@@ -64,8 +68,15 @@ class MainWindow(QtGui.QMainWindow):
             self.tab_widget.setCurrentIndex(index)
 
     def show_dialog(self, dialog_type):
-        dialog = dialog_type.run(self)
-
+        flag, dialog = dialog_type.run(self)
+        if isinstance(dialog, CustomSelectDialog) and flag:
+            result = dialog.get_stock_detail()
+            source_data = self.deal_tab.stock_model.source_data
+            if result[0] in [sd[0] for sd in source_data]:
+                return
+            source_data.append(result)
+            self.deal_tab.stock_model.update_source_data(source_data)
+            self.deal_tab.stock_tableView.resizeColumnsToContents()
 
 if __name__ == '__main__':
     import sys

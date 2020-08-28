@@ -3,6 +3,7 @@
 # created by huiguoyu @ 2020/7/21 13:11
 import os
 import datetime
+
 import yaml
 
 import requests
@@ -36,7 +37,6 @@ class StockModel(QtCore.QAbstractTableModel):
         return [u'股票代码',
                 u'股票名称',
                 u'买入价',
-                u'买入日期',
                 u'追溯天数']
 
     def rowCount(self, parentIndex=QtCore.QModelIndex()):
@@ -105,11 +105,15 @@ class StrategyModel(QtCore.QAbstractTableModel):
     def header_data(self):
         return [u'股票代码',
                 u'股票名称',
+                u'买入价',
+                u'今日开盘价',
+                u'昨日收盘价',
                 u'当前价',
+                u'最高价',
+                u'最低价',
                 u'浮盈比例',
                 u'回吐比例',
-                u'最高价',
-                u'浮盈出场价格'
+                u'浮盈出场价格',
                 u'止损价格',
                 ]
 
@@ -135,11 +139,11 @@ class StrategyModel(QtCore.QAbstractTableModel):
         key = self.header_data[column]
         if role == QtCore.Qt.DisplayRole:
             value = self.source_data[row][column]
-            if isinstance(value, float) and column in [3, 4]:
+            if isinstance(value, float) and column in [8, 9]:
                 return '{:.2f}%'.format(value*100)
             return self.source_data[row][column]
         elif role == QtCore.Qt.BackgroundColorRole:
-            flag = self.source_data[row][-1]
+            flag = self.source_data[row][-3]
             if flag:
                 return QtGui.QColor(flag)
 
@@ -151,14 +155,15 @@ class StrategyModel(QtCore.QAbstractTableModel):
 
 class DealWidget(QtGui.QWidget):
 
+    custom_stock_signal = QtCore.Signal(object)
     playFlag = QtCore.Signal()
     code = u'交易追踪'
 
-    def __init__(self, parent=None):
+    def __init__(self, mute_flag, parent=None):
         super(DealWidget, self).__init__(parent)
 
         self.setupUi(self)
-        self.initDataBefore()
+        self.initDataBefore(mute_flag)
         self.bindFun()
         self.initDataAfter()
 
@@ -184,8 +189,8 @@ class DealWidget(QtGui.QWidget):
         self.strategy_model = StrategyModel()
         self.strategy_tableView.setModel(self.strategy_model)
         self.strategy_layout.addWidget(self.strategy_tableView)
-        self.stock_tableView.setFixedWidth(360)
-        self.strategy_tableView.setMinimumWidth(500)
+        self.stock_tableView.setFixedWidth(300)
+        self.strategy_tableView.setMinimumWidth(700)
         #
         self.request_timer = QtCore.QTimer()
         self.request_timer.setInterval(1000)
@@ -195,15 +200,14 @@ class DealWidget(QtGui.QWidget):
 
     def bindFun(self):
         self.request_timer.timeout.connect(self.request_stock)
-        self.request_timer.timeout.connect(self.run_strategy)
         self.playFlag.connect(self.play)
         self.stock_model.dataChanged.connect(self.update_custom_view)
 
-    def initDataBefore(self):
+    def initDataBefore(self, mute_flag):
+        self.mute_flag = mute_flag
         # 读取配置
         config = self._read_config()
         custom_stock_list = []
-        today = datetime.datetime.today().strftime('%Y%m%d')
         for key, value in config.items():
             code = key
             sina_code = format_code_to_sina(code)
@@ -213,13 +217,14 @@ class DealWidget(QtGui.QWidget):
                 continue
             name = result[0][1]
             bid_price = value[0]
-            bid_date = value[1]
             try:
-                retrospect_days = value[2]
+                retrospect_days = value[1]
             except:
                 retrospect_days = 1
-            history_data = get_history_data(code)
-            custom_stock_list.append([code, name, bid_price, bid_date, retrospect_days])
+            history_data = get_history_data(code)[:retrospect_days]
+            top_price = max([float(hd[6]) for hd in history_data])
+            bottom_price = min([float(hd[5]) for hd in history_data])
+            custom_stock_list.append([code, name, bid_price, retrospect_days, top_price, bottom_price])
 
         self.stock_model.update_source_data(custom_stock_list)
         self.stock_tableView.resizeColumnsToContents()
@@ -227,79 +232,75 @@ class DealWidget(QtGui.QWidget):
     def initDataAfter(self):
         # 获取最高价
         # 开始请求行情
-        # self.request_timer.start()
-        pass
+        self.request_timer.start()
 
     def update_custom_view(self, index):
-        row = index.row()
-        column = index.column()
-        if column == 0:
-            pass
-
-
+        self._save_config()
 
     def request_stock(self):
         now = datetime.datetime.now()
-        stock_text = self.stock_lineEdit.text()
+        sourcedata = self.stock_model.source_data
+        stock_text = ','.join([format_code_to_sina(sd[0]) for sd in sourcedata])
         response = requests.get('http://hq.sinajs.cn/list=%s' % stock_text)
         if response.status_code == 200:
             stock_list = response.text.split(';\n')
             result = []
-            for stock in stock_list[:-1]:
-                stock_code, stock_detail = stock.split('=')
-                stock_code = stock_code.split('var ')[1].split('_')[-1]
+            for index, stock in enumerate(stock_list[:-1]):
+                _, stock_detail = stock.split('=')
                 stock_detal_list = stock_detail.split(',')
+                stock_code = sourcedata[index][0]
+                stock_name = stock_detal_list[0][1:]
+                bid_price = sourcedata[index][2]
+                today_open = stock_detal_list[1]
+                last_close = stock_detal_list[2]
+                current_price = float(stock_detal_list[3])
+                today_top_price = float(stock_detal_list[4])
+                today_bottom_price = float(stock_detal_list[5])
+                top_price = max(sourcedata[index][-2], today_top_price)
+                bottom_price = min(sourcedata[index][-1], today_bottom_price)
+                current_date = stock_detal_list[30]
+                current_time = stock_detal_list[31]
+                gains, stop_price, line, giveup_price, flag = self.run_strategy(current_price, top_price, bid_price)
                 try:
                     temp_list = [
                         stock_code,
-                        stock_detal_list[0],
-                        stock_detal_list[1],
-                        stock_detal_list[2],
-                        stock_detal_list[3],
-                        stock_detal_list[4],
-                        stock_detal_list[5],
-                        stock_detal_list[30],
-                        stock_detal_list[31]
+                        stock_name,
+                        bid_price,
+                        today_open,
+                        last_close,
+                        current_price,
+                        top_price,
+                        bottom_price,
+                        gains,
+                        stop_price,
+                        line,
+                        giveup_price,
+                        flag,
+                        current_date,
+                        current_time
                     ]
                     result.append(temp_list)
                 except:
                     pass
 
-        self.stock_model.update_source_data(result)
-        self.stock_tableView.resizeColumnsToContents()
-
-    def run_strategy(self):
-        stock_list = self.stock_model.source_data
-        strategy_list = []
-        for index, stock in enumerate(stock_list):
-            code = stock[0]
-            name = stock[1]
-            current = float(stock[4])
-            top = float(stock[5])
-            bid = float(self.config_data.get(code) or 0)
-            gains = (top-bid)/bid if bid > 0 else 0
-            giveup = self._get_giveup(gains)
-            line = self._get_line(bid, gains, giveup) if bid > 0 else 0
-            if current and current <= line:
-                flag = 'red'
-                self.playFlag.emit()
-            if current < bid*0.97:
-                flag = 'green'
-                self.playFlag.emit()
-            else:
-                flag = None
-            strategy_list.append([
-                code,
-                name,
-                bid,
-                gains,
-                giveup,
-                top,
-                line,
-                flag
-            ])
-        self.strategy_model.update_source_data(strategy_list)
+        self.strategy_model.update_source_data(result)
         self.strategy_tableView.resizeColumnsToContents()
+
+    def run_strategy(self, current, top, bid):
+        gains = (top-bid)/bid if bid > 0 else 0 # 浮盈比例
+        stop = self._get_giveup(gains)    # 出场价格
+        line = self._get_line(bid, gains, stop) if bid > 0 else 0
+        giveup = bid*0.97
+        if current and current <= line:
+            flag = 'red'
+            self.playFlag.emit()
+        if current < giveup:
+            flag = 'green'
+            self.playFlag.emit()
+        else:
+            flag = None
+        return gains, stop, line, giveup, flag
+
 
     def _get_giveup(self, value):
         if value < 0.05:
@@ -330,7 +331,23 @@ class DealWidget(QtGui.QWidget):
             stock_dict = yaml.load(f)
         return stock_dict
 
+    def _save_config(self):
+        file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data/StockList.yml')
+        data = self.stock_model.source_data
+        strategy_data = self.strategy_model.source_data
+        result = {}
+        for index, stock in enumerate(data):
+            bid_price = stock[2]
+            retrospect_days = stock[3]
+            top = strategy_data[index][6]
+            bottom = strategy_data[index][7]
+            result.setdefault(stock[0], [bid_price, retrospect_days, top, bottom])
+        with open(file_path, 'w') as f:
+            f.write(yaml.dump(result))
+
     def play_sound(self):
+        if self.mute_flag:
+            return
         mp3_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources/8487.mp3')
         playsound(mp3_path)
         playsound(mp3_path)
@@ -341,31 +358,9 @@ class DealWidget(QtGui.QWidget):
             self.audio_thread.start()
 
     def closeEvent(self, event):
-        strategy_list = self.strategy_model.source_data
-        stock_dict = {strategy[0]: strategy[2] for strategy in strategy_list}
-        file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data/StockList.yml')
-        with open(file_path, 'w') as f:
-            f.write(yaml.dump(stock_dict))
+        self._save_config()
+        # self.request_timer.stop()
+        # self.audio_thread.terminate()
 
-    def edit_bid(self, index):
-        if not index.isValid():
-            return
-        row = index.row()
-        column = index.column()
-        strategy_list = self.strategy_model.source_data
-        name = strategy_list[row][1]
-        code = strategy_list[row][0]
-        dlg = QtGui.QDialog(self)
-        dlg.setWindowTitle(u'编辑买入价')
-        layout = QtGui.QVBoxLayout()
-        dlg.setLayout(layout)
-        label = QtGui.QLabel(name)
-        layout.addWidget(label)
-        edit = QtGui.QLineEdit()
-        layout.addWidget(edit)
-        btn = QtGui.QPushButton(u'确定')
-        btn.clicked.connect(dlg.accept)
-        layout.addWidget(btn)
-        result = dlg.exec_()
-        if result:
-            self.config_data.update({code: float(edit.text())})
+    def mute(self, flag):
+        self.mute_flag = flag
