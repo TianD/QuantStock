@@ -77,7 +77,6 @@ class StockModel(QtCore.QAbstractTableModel):
         self.dataChanged.emit(index, index)
         return True
 
-
     def update_source_data(self, source_data):
         self.beginResetModel()
         self.source_data = source_data
@@ -166,7 +165,6 @@ class DealWidget(QtGui.QWidget):
         self.initDataBefore()
         self.bindFun()
         self.initDataAfter()
-
 
     def setupUi(self, parent):
         self.main_layout = QtGui.QVBoxLayout()
@@ -299,7 +297,7 @@ class DealWidget(QtGui.QWidget):
         if current and current <= line:
             flag = 'red'
             self.playFlag.emit()
-        if current < giveup:
+        elif current < giveup:
             flag = 'green'
             self.playFlag.emit()
         else:
@@ -335,7 +333,7 @@ class DealWidget(QtGui.QWidget):
             stock_dict = yaml.load(f)
         return stock_dict
 
-    def _save_config(self):
+    def save_config(self):
         file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data/StockList.yml')
         data = self.stock_model.source_data
         strategy_data = self.strategy_model.source_data
@@ -359,10 +357,10 @@ class DealWidget(QtGui.QWidget):
         if not self.audio_thread.isRunning():
             self.audio_thread.start()
 
-    def closeEvent(self, event):
-        self._save_config()
-        # self.request_timer.stop()
-        # self.audio_thread.terminate()
+    # def closeEvent(self, event):
+    #     self.save_config()
+    #     # self.request_timer.stop()
+    #     # self.audio_thread.terminate()
 
     def mute(self, flag):
         if flag:
