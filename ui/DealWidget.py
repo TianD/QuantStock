@@ -163,7 +163,7 @@ class DealWidget(QtGui.QWidget):
         super(DealWidget, self).__init__(parent)
 
         self.setupUi(self)
-        self.initDataBefore(mute_flag)
+        self.initDataBefore()
         self.bindFun()
         self.initDataAfter()
 
@@ -197,14 +197,19 @@ class DealWidget(QtGui.QWidget):
         #
         self.audio_thread = QtCore.QThread()
         self.audio_thread.run = self.play_sound
+        #
+        self.stock_tableView.setContextMenuPolicy(QtCore.Qt.ActionsContextMenu)
+        del_option = QtGui.QAction(self.stock_tableView)
+        del_option.setText(u'删除')
+        del_option.triggered.connect(self.remove_stock)
+        self.stock_tableView.addAction(del_option)
 
     def bindFun(self):
         self.request_timer.timeout.connect(self.request_stock)
         self.playFlag.connect(self.play)
         self.stock_model.dataChanged.connect(self.update_custom_view)
 
-    def initDataBefore(self, mute_flag):
-        self.mute_flag = mute_flag
+    def initDataBefore(self):
         # 读取配置
         config = self._read_config()
         custom_stock_list = []
@@ -288,7 +293,7 @@ class DealWidget(QtGui.QWidget):
 
     def run_strategy(self, current, top, bid):
         gains = (top-bid)/bid if bid > 0 else 0 # 浮盈比例
-        stop = self._get_giveup(gains)    # 出场价格
+        stop = self._get_stop(gains)    # 出场价格
         line = self._get_line(bid, gains, stop) if bid > 0 else 0
         giveup = bid*0.97
         if current and current <= line:
@@ -301,8 +306,7 @@ class DealWidget(QtGui.QWidget):
             flag = None
         return gains, stop, line, giveup, flag
 
-
-    def _get_giveup(self, value):
+    def _get_stop(self, value):
         if value < 0.05:
             return 0.0
         elif value >=0.05 and value < 0.10:
@@ -316,13 +320,13 @@ class DealWidget(QtGui.QWidget):
         elif value >=0.3:
             return 0.1
 
-    def _get_line(self, bid, gains, giveup):
-        if not (bid and gains and giveup):
+    def _get_line(self, bid, gains, stop):
+        if not (bid and gains and stop):
             return 0
         if gains < 0.05:
             return bid*(1+0.002)
         else:
-            return bid*(1+gains*(1-giveup))
+            return bid*(1+gains*(1-stop))
 
     def _read_config(self):
         file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data/StockList.yml')
@@ -346,8 +350,6 @@ class DealWidget(QtGui.QWidget):
             f.write(yaml.dump(result))
 
     def play_sound(self):
-        if self.mute_flag:
-            return
         mp3_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources/8487.mp3')
         playsound(mp3_path)
         playsound(mp3_path)
@@ -363,4 +365,16 @@ class DealWidget(QtGui.QWidget):
         # self.audio_thread.terminate()
 
     def mute(self, flag):
-        self.mute_flag = flag
+        if flag:
+            self.audio_thread.quit()
+        else:
+            self.audio_thread.start()
+
+    def remove_stock(self):
+        selected = self.stock_tableView.selectedIndexes()
+        rows = [index.row() for index in selected]
+        source_data = self.stock_model.source_data
+        for row in sorted(rows)[::-1]:
+            source_data.pop(row)
+        self.stock_model.update_source_data(source_data)
+        self.stock_tableView.resizeColumnsToContents()
