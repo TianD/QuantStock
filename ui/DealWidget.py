@@ -238,13 +238,17 @@ class DealWidget(QtGui.QWidget):
         self.request_timer.start()
 
     def update_custom_view(self, index):
-        self._save_config()
+        self.save_config()
+        self.initDataBefore()
 
     def request_stock(self):
         now = datetime.datetime.now()
         sourcedata = self.stock_model.source_data
         stock_text = ','.join([format_code_to_sina(sd[0]) for sd in sourcedata])
-        response = requests.get('http://hq.sinajs.cn/list=%s' % stock_text)
+        try:
+            response = requests.get('http://hq.sinajs.cn/list=%s' % stock_text)
+        except:
+            return
         if response.status_code == 200:
             stock_list = response.text.split(';\n')
             result = []
