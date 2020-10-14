@@ -299,7 +299,7 @@ class DealWidget(QtGui.QWidget):
         if current and current <= line:
             flag = 'red'
             self.playFlag.emit()
-        if current < giveup:
+        elif current < giveup:
             flag = 'green'
             self.playFlag.emit()
         else:
