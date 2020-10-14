@@ -77,7 +77,6 @@ class StockModel(QtCore.QAbstractTableModel):
         self.dataChanged.emit(index, index)
         return True
 
-
     def update_source_data(self, source_data):
         self.beginResetModel()
         self.source_data = source_data
@@ -167,7 +166,6 @@ class DealWidget(QtGui.QWidget):
         self.bindFun()
         self.initDataAfter()
 
-
     def setupUi(self, parent):
         self.main_layout = QtGui.QVBoxLayout()
         self.setLayout(self.main_layout)
@@ -240,13 +238,17 @@ class DealWidget(QtGui.QWidget):
         self.request_timer.start()
 
     def update_custom_view(self, index):
-        self._save_config()
+        self.save_config()
+        self.initDataBefore()
 
     def request_stock(self):
         now = datetime.datetime.now()
         sourcedata = self.stock_model.source_data
         stock_text = ','.join([format_code_to_sina(sd[0]) for sd in sourcedata])
-        response = requests.get('http://hq.sinajs.cn/list=%s' % stock_text)
+        try:
+            response = requests.get('http://hq.sinajs.cn/list=%s' % stock_text)
+        except:
+            return
         if response.status_code == 200:
             stock_list = response.text.split(';\n')
             result = []
@@ -335,7 +337,7 @@ class DealWidget(QtGui.QWidget):
             stock_dict = yaml.load(f)
         return stock_dict
 
-    def _save_config(self):
+    def save_config(self):
         file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data/StockList.yml')
         data = self.stock_model.source_data
         strategy_data = self.strategy_model.source_data
@@ -359,10 +361,10 @@ class DealWidget(QtGui.QWidget):
         if not self.audio_thread.isRunning():
             self.audio_thread.start()
 
-    def closeEvent(self, event):
-        self._save_config()
-        # self.request_timer.stop()
-        # self.audio_thread.terminate()
+    # def closeEvent(self, event):
+    #     self.save_config()
+    #     # self.request_timer.stop()
+    #     # self.audio_thread.terminate()
 
     def mute(self, flag):
         if flag:

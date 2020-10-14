@@ -78,6 +78,12 @@ class MainWindow(QtGui.QMainWindow):
             self.deal_tab.stock_model.update_source_data(source_data)
             self.deal_tab.stock_tableView.resizeColumnsToContents()
 
+    def closeEvent(self, event):
+        self.deal_tab.save_config()
+        # self.request_timer.stop()
+        # self.audio_thread.terminate()
+
+
 if __name__ == '__main__':
     import sys
     app = QtGui.QApplication(sys.argv)

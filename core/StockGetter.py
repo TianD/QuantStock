@@ -33,6 +33,7 @@ def request_date_is_tradeday(day):
         return True
     return False
 
+
 def retrospect_to_date(from_day, days):
     i = 0
     to_day = pd.to_datetime(from_day, format='%Y%m%d')
@@ -44,10 +45,11 @@ def retrospect_to_date(from_day, days):
             return to_day.strftime('%Y%m%d')
         to_day = pd.to_datetime(to_day) - pd.Timedelta(1, 'day')
 
+
 def format_code_to_163(stock_code):
-    if stock_code.startswith('6'):
+    if stock_code.startswith('6') or stock_code.startswith('688'):
         stock_code = stock_code
-    elif stock_code.startswith('0'):
+    elif stock_code.startswith('0') or stock_code.startswith('3'):
         stock_code = '1'+stock_code
     else:
         pass
@@ -55,9 +57,9 @@ def format_code_to_163(stock_code):
 
 
 def format_code_to_sina(stock_code):
-    if stock_code.startswith('6'):
+    if stock_code.startswith('6') or stock_code.startswith('688'):
         stock_code = 'sh' + stock_code
-    elif stock_code.startswith('0'):
+    elif stock_code.startswith('0') or stock_code.startswith('3'):
         stock_code = 'sz' + stock_code
     else:
         pass
